@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FF14 Crafting Analytics</title>
+  <meta content="Ellie Frost" name="author">
+  <meta
+    content="This program analyzes Final Fantasy XIV crafting recipes and their marketability based on information from XIVAPI and Universalis."
+    name="description">
+  <link href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.css" rel="stylesheet" />
+  <link href="./styles.css" rel="stylesheet">
+  <script defer src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/umd.js"></script>
+  <script defer src="./script.js"></script>
+</head>
+
+<body class="u-no-scroll">
+  <main class="c-content">
+    <header>
+      <nav class="c-controls u-margin-below">
+        <button class="c-controls__button js-click-page-previous">Previous Page</button>
+        <button class="c-controls__button js-click-page-next">Next Page</button>
+        <button class="c-controls__button js-click-view-all">View All</button>
+        <button class="c-controls__button js-click-view-selected">View Selected</button>
+        <button class="c-controls__button js-click-refresh">Refresh</button>
+        <select class="c-controls__select js-change-crafter">
+          <option value="alchemist">Alchemist</option>
+          <option value="armorer">Armorer</option>
+          <option value="blacksmith">Blacksmith</option>
+          <option value="carpenter">Carpenter</option>
+          <option value="culinarian">Culinarian</option>
+          <option value="goldsmith">Goldsmith</option>
+          <option value="leatherworker">Leatherworker</option>
+          <option value="weaver">Weaver</option>
+        </select>
+        <input class="c-controls__search js-input-search" placeholder="Search"></input>
+        <select class="c-controls__select js-change-world">
+          <option value="adamantoise">Adamantoise</option>
+          <option value="cactuar">Cactuar</option>
+          <option value="faerie">Faerie</option>
+          <option value="gilgamesh">Gilgamesh</option>
+          <option value="jenova">Jenova</option>
+          <option value="midgardsormr">Midgardsormr</option>
+          <option value="sargatanas">Sargatanas</option>
+          <option value="siren">Siren</option>
+        </select>
+      </nav>
+      <article class="u-margin-below">
+        <p class="c-date-updated">Last Updated: <span class="js-date-updated">N/A</span></p>
+      </article>
+    </header>
+    <main class="c-viewbox">
+      <div class="js-toggle-loading-bar"></div>
+      <div class="js-toggle-table"></div>
+    </main>
+  </main>
+</body>
+
+</html>
