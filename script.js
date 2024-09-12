@@ -53,6 +53,8 @@ const VIEW = {
 
 //global variables
 
+var unrecoverable = false;
+
 var ff14_hard_refresh = async () => {
   await DB.clear();
   localStorage.clear();
@@ -67,7 +69,7 @@ const get_nested = (obj, path) => path.split(".").reduce((sub_obj, key) => sub_o
 
 const n_days_ago = (n, abs = true, date = Date.now()) => ((s = n * 24 * 60 * 60) => abs ? s : date / 1000 - s)();
 
-const init_pause = (API) => (m = 1000 / API.SEC) => new Promise((r) => setTimeout(r, m));
+const init_pause = (n) => (m = 1000 / n) => new Promise((r) => setTimeout(r, m));
 
 const print_n = (n) => Math.round(n).toLocaleString();
 
@@ -90,6 +92,36 @@ const get_record_by_list = (list) => {
 
   return fetch(`https://universalis.app/api/v2/history/${id}/${list}${params}`).then((r) => r.json());
 }
+
+const init_load_data = (fn_call, fn_done = () => {}) => {
+  const load_data = async (args, tries = 3) => {
+    try {
+      const data = await fn_call(...args);
+
+      fn_done();
+
+      return data;
+    } catch (error) {
+      if (unrecoverable) {
+        return;
+      }
+
+      console.error(error);
+
+      if (--tries) {
+        return load_data(args, tries);
+      } else {
+        unrecoverable = true;
+
+        if (confirm("A fatal error occurred.")) {
+          location.reload();
+        }
+      }
+    }
+  };
+
+  return load_data;
+};
 
 //selectors
 
@@ -293,11 +325,13 @@ const load_recipes = async () => {
 
   let next = null;
 
+  const load_data = init_load_data(get_recipe_by_page);
+
   store.set_loaded_current(0);
   store.set_loaded_total(0);
 
   do {
-    const page = await get_recipe_by_page(next);
+    const page = await load_data([next]);
 
     next = page.next;
 
@@ -342,26 +376,31 @@ const load_records = async () => {
   }
   records_index = [...records_index.values()];
 
-  const pause = init_pause(UNIVERSALIS);
   const promise_list = [];
 
   let pending = 0;
+
+  const pause = init_pause(UNIVERSALIS.SEC);
+
+  const load_data = init_load_data(async (...args) => {
+    await pause();
+
+    return get_record_by_list(...args);
+  }, () => {
+    store.set_loaded_current(Math.min(store.get_loaded_current() + UNIVERSALIS.LIM, records_index.length));
+    pending--;
+  });
 
   store.set_loaded_current(0);
   store.set_loaded_total(records_index.length);
 
   for (let i = 0; i < records_index.length; i += UNIVERSALIS.LIM) {
-    do { await pause(); } while (pending === UNIVERSALIS.CON);
+    while (pending === UNIVERSALIS.CON) { await pause(); }
 
-    const page = get_record_by_list([records_index.slice(i, i + UNIVERSALIS.LIM)]);
+    const page = load_data([records_index.slice(i, i + UNIVERSALIS.LIM)]);
 
     promise_list.push(page);
     pending++;
-
-    page.then(() => {
-      store.set_loaded_current(Math.min(store.get_loaded_current() + UNIVERSALIS.LIM, records_index.length));
-      pending--;
-    });
   }
 
   const page_list = await Promise.all(promise_list);
