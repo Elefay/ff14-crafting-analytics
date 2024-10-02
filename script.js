@@ -261,6 +261,7 @@ const analyze_data = async () => {
       id,
       ingredients: [],
       level: old_recipe.level,
+      level_internal: old_recipe.level_internal,
       result: null,
       selected: ((recipe = (recipes_selected.find((recipe) => id === recipe.id))) => recipe ? recipe.selected : 0)(),
       source: old_recipe.source
@@ -345,6 +346,7 @@ const load_recipes = async () => {
           name: item.fields.Name,
           qty: fields.AmountIngredient[i]
         })),
+        level_internal: fields.RecipeLevelTable.value,
         level: fields.RecipeLevelTable.fields.ClassJobLevel,
         result: {
           id: fields.ItemResult.row_id,
@@ -570,7 +572,7 @@ const get_recipes_sort = (recipes = store.get_recipes(), sort = store.get_sort()
 
     switch (Math.abs(sort)) {
       case SORT.LEVEL:
-        return a.level - b.level;
+        return a.level_internal - b.level_internal;
       case SORT.VALUE_07_HQ:
         return max_profit(a, b, "result.past_07_days.hq.profit_pd");
       case SORT.VALUE_07_NQ:
