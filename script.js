@@ -269,20 +269,21 @@ const analyze_data = async () => {
 
     const date_07 = n_days_ago(7, false, date_updated);
 
-    new_recipe.ingredients = old_recipe.ingredients.map((item) => {
-      const history_30 = ff14_records[item.id];
+    new_recipe.ingredients = old_recipe.ingredients.map(({ id, name, qty}) => {
+      const history_30 = ff14_records[id];
       const history_07 = history_30.filter((sale) => sale.date > date_07);
 
       return {
-        name: item.name,
+        id,
+        name,
         past_07_days: calc_mean(history_07),
         past_30_days: calc_mean(history_30),
-        qty: item.qty
+        qty
       };
     });
 
-    new_recipe.result = (() => {
-      const history = ff14_records[old_recipe.result.id];
+    new_recipe.result = (({ result: { id, name, qty } } = old_recipe) => {
+      const history = ff14_records[id];
 
       const history_07_hq = history.filter((sale) => sale.date > date_07 && sale.hq);
       const history_07_nq = history.filter((sale) => sale.date > date_07 && !sale.hq);
@@ -290,13 +291,14 @@ const analyze_data = async () => {
       const history_30_nq = history.filter((sale) => !sale.hq);
 
       const fn_cost = calc_avg_cost(new_recipe.ingredients);
-      const fn_profit = calc_avg_profit(old_recipe.result.qty);
+      const fn_profit = calc_avg_profit(qty);
 
       const fn_profit_07 = fn_profit(fn_cost("past_07_days"))(7);
       const fn_profit_30 = fn_profit(fn_cost("past_30_days"))(30);
 
       return {
-        name: old_recipe.result.name,
+        id,
+        name,
         past_07_days: {
           hq: fn_profit_07(history_07_hq),
           nq: fn_profit_07(history_07_nq)
@@ -305,7 +307,7 @@ const analyze_data = async () => {
           hq: fn_profit_30(history_30_hq),
           nq: fn_profit_30(history_30_nq)
         },
-        qty: old_recipe.result.qty
+        qty
       };
     })();
 
@@ -483,7 +485,7 @@ const handle_change_world = async (event) => {
 const handle_click_copy = async () => {
   const dom_copy = document.querySelector(".js-copy-summary");
 
-  await navigator.clipboard.writeText(dom_copy.innerText);
+  await navigator.clipboard.writeText(`${dom_copy.innerText}\n`);
   alert("Copied!");
 };
 
@@ -623,6 +625,8 @@ const render_summary = (recipes) => {
   const sort_type = Math.abs(store.get_sort());
 
   let results = recipes.map(({ result, selected }) => {
+    const { id, name, qty } = result;
+
     const map = {
       [SORT.VALUE_07_HQ]: "past_07_days.hq",
       [SORT.VALUE_07_NQ]: "past_07_days.nq",
@@ -631,10 +635,11 @@ const render_summary = (recipes) => {
     };
 
     return {
-      name: result.name,
+      id,
+      name,
       price: ((path = map[sort_type]) => path ? get_nested(result, path).price : 0)(),
       profit_pd: ((path = map[sort_type]) => path ? get_nested(result, path).profit_pd : 0)(),
-      qty: result.qty * selected
+      qty: qty * selected
     };
   });
 
@@ -642,9 +647,10 @@ const render_summary = (recipes) => {
     const set = {};
 
     for (const { ingredients, selected } of recipes) {
-      for (const { name, past_07_days, past_30_days, qty } of ingredients) {
+      for (const { id, name, past_07_days, past_30_days, qty } of ingredients) {
         if (!set[name]) {
           set[name] = {
+            id,
             price: (() => {
               switch (sort_type) {
                 case SORT.VALUE_07_HQ:
@@ -664,7 +670,8 @@ const render_summary = (recipes) => {
       }
     }
 
-    return Object.entries(set).map(([name, { price, qty }]) => ({
+    return Object.entries(set).map(([name, { id, price, qty }]) => ({
+      id,
       name,
       price,
       qty
@@ -674,18 +681,21 @@ const render_summary = (recipes) => {
   const calc_total_price = (list) => list.some(({ price }) => !price) ? 0 : list.reduce((total, { price, qty }) => total + price * qty, 0);
   const calc_total_profit_pd = (list) => list.some(({ profit_pd }) => !profit_pd) ? 0 : list.reduce((total, { profit_pd }) => total + profit_pd, 0);
 
-  const calc_max_length = (list) => list.reduce((max, str) => Math.max(max, str.replaceAll("&nbsp;", "").length), 0);
-  const calc_max_length_item = (list) => calc_max_length(list.map(({ name, qty }) => get_str_item({ name, qty })));
-
   const get_space = (n) => Array(n).fill("&nbsp;").join("");
   const get_str_data = (data, text) => data ? `${get_space(4)}${print_n(data)}${text}` : "";
+  const get_url = (id) => `https://universalis.app/market/${id}`;
 
-  const get_str_item = ({ name, price, qty }, max = 0) => {
+  const has_any_price = results.some(({ price }) => price) || ingredients.some(({ price }) => price);
+
+  const get_str_item = ({ id, name, price, qty }) => {
     const str_name = `${name}${qty > 1 ? ` (${print_n(qty)})` : ""}`;
-    const str_price = price && max ? `${get_space(max - str_name.length)} | ${print_n(price * qty)} gil` : "";
+    const str_price = price ? ` | ${print_n(price * qty)} gil` : has_any_price ? " | ?" : "";
+    const str_link = ` | <a href="${get_url(id)}">#${id}</a>`;
 
-    return `${get_space(4)}${str_name}${str_price}`;
+    return `${get_space(4)}${str_name}${str_price}${str_link}`;
   };
+
+  const sort_list = (list) => list.sort((a, b) => a.name.localeCompare(b.name)).map((item) => get_str_item(item));
 
   const income = calc_total_price(results) * (1 - MB_TAX);
   const cost = calc_total_price(ingredients) * (1 + MB_TAX);
@@ -699,13 +709,38 @@ const render_summary = (recipes) => {
     get_str_data(profit_pd, " gil / day profit")
   ];
 
-  const max_length = Math.max(calc_max_length_item(results), calc_max_length_item(ingredients), calc_max_length(totals));
-
-  const sort_list = (list) => list.sort((a, b) => a.name.localeCompare(b.name)).map((item) => get_str_item(item, max_length));
-
   results = sort_list(results);
   ingredients = sort_list(ingredients);
   totals = totals.filter((str) => str);
+
+  [results, ingredients, totals] = (() => {
+    const tables = [results, ingredients, totals].map((table) => table.map((row) => row.split(" | ")));
+
+    const max_length = [];
+
+    for (const table of tables) {
+      for (const row of table) {
+        for (let i = 0; i < row.length; i++) {
+          if (!max_length[i]) {
+            max_length[i] = 0;
+          }
+          if (row[i] && row[i].length > max_length[i]) {
+            max_length[i] = row[i].length;
+          }
+        }
+      }
+    }
+
+    for (const table of tables) {
+      for (const row of table) {
+        for (let i = 0; i < row.length - 1; i++) {
+          row[i] = `${row[i]}${get_space(max_length[i] - row[i].length)}`;
+        }
+      }
+    }
+
+    return tables.map((table) => table.map((row) => row.join(" | ")));
+  })();
 
   const has_results = results.length > 0;
   const has_ingredients = ingredients.length > 0;
@@ -730,7 +765,7 @@ const render_summary = (recipes) => {
           ${get_space(2)}Ingredients
           <br>
           <br>
-          ${ingredients.join("<br>")}        
+          ${ingredients.join("<br>")}
         ` : ""}
         ${has_totals ? `
           <br>
