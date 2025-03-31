@@ -624,21 +624,21 @@ const render_loading_bar = () => {
 const render_summary = (recipes) => {
   const sort_type = Math.abs(store.get_sort());
 
+  const data_type = ((path) => path[sort_type])({
+    [SORT.VALUE_07_HQ]: "past_07_days.hq",
+    [SORT.VALUE_07_NQ]: "past_07_days.nq",
+    [SORT.VALUE_30_HQ]: "past_30_days.hq",
+    [SORT.VALUE_30_NQ]: "past_30_days.nq"
+  });
+
   let results = recipes.map(({ result, selected }) => {
     const { id, name, qty } = result;
-
-    const map = {
-      [SORT.VALUE_07_HQ]: "past_07_days.hq",
-      [SORT.VALUE_07_NQ]: "past_07_days.nq",
-      [SORT.VALUE_30_HQ]: "past_30_days.hq",
-      [SORT.VALUE_30_NQ]: "past_30_days.nq"
-    };
 
     return {
       id,
       name,
-      price: ((path = map[sort_type]) => path ? get_nested(result, path).price : 0)(),
-      profit_pd: ((path = map[sort_type]) => path ? get_nested(result, path).profit_pd : 0)(),
+      price: data_type ? get_nested(result, `${data_type}.price`) : 0,
+      profit_pd: data_type ? get_nested(result, `${data_type}.profit_pd`) : 0,
       qty: qty * selected
     };
   });
@@ -681,21 +681,18 @@ const render_summary = (recipes) => {
   const calc_total_price = (list) => list.some(({ price }) => !price) ? 0 : list.reduce((total, { price, qty }) => total + price * qty, 0);
   const calc_total_profit_pd = (list) => list.some(({ profit_pd }) => !profit_pd) ? 0 : list.reduce((total, { profit_pd }) => total + profit_pd, 0);
 
-  const get_space = (n) => Array(n).fill("&nbsp;").join("");
-  const get_str_data = (data, text) => data ? `${get_space(4)}${print_n(data)}${text}` : "";
+  const get_str_data = (data, text) => data ? `${print_n(data)}${text}` : "";
   const get_url = (id) => `https://universalis.app/market/${id}`;
 
   const has_any_price = results.some(({ price }) => price) || ingredients.some(({ price }) => price);
 
   const get_str_item = ({ id, name, price, qty }) => {
     const str_name = `${name}${qty > 1 ? ` (${print_n(qty)})` : ""}`;
-    const str_price = price ? ` | ${print_n(price * qty)} gil` : has_any_price ? " | ?" : "";
+    const str_price = price ? ` | ${print_n(price * qty)} gil` : has_any_price ? " | -" : "";
     const str_link = ` | <a href="${get_url(id)}">#${id}</a>`;
 
-    return `${get_space(4)}${str_name}${str_price}${str_link}`;
+    return `${str_name}${str_price}${str_link}`;
   };
-
-  const sort_list = (list) => list.sort((a, b) => a.name.localeCompare(b.name)).map((item) => get_str_item(item));
 
   const income = calc_total_price(results) * (1 - MB_TAX);
   const cost = calc_total_price(ingredients) * (1 + MB_TAX);
@@ -709,9 +706,20 @@ const render_summary = (recipes) => {
     get_str_data(profit_pd, " gil / day profit")
   ];
 
+  const sort_list = (list) => list.sort((a, b) => a.name.localeCompare(b.name)).map((item) => get_str_item(item));
+
   results = sort_list(results);
   ingredients = sort_list(ingredients);
   totals = totals.filter((str) => str);
+
+  const has_results = results.length > 0;
+  const has_ingredients = ingredients.length > 0;
+  const has_totals = totals.length > 0;
+
+  const get_space = (n) => Array(n).fill("&nbsp;").join("");
+
+  const indent_1 = get_space(2);
+  const indent_2 = get_space(4);
 
   [results, ingredients, totals] = (() => {
     const tables = [results, ingredients, totals].map((table) => table.map((row) => row.split(" | ")));
@@ -720,31 +728,22 @@ const render_summary = (recipes) => {
 
     for (const table of tables) {
       for (const row of table) {
-        for (let i = 0; i < row.length; i++) {
-          if (!max_length[i]) {
-            max_length[i] = 0;
+        row.forEach((col, i) => {
+          if (!max_length[i] || col.length > max_length[i]) {
+            max_length[i] = col.length;
           }
-          if (row[i] && row[i].length > max_length[i]) {
-            max_length[i] = row[i].length;
-          }
-        }
+        });
       }
     }
 
-    for (const table of tables) {
-      for (const row of table) {
-        for (let i = 0; i < row.length - 1; i++) {
-          row[i] = `${row[i]}${get_space(max_length[i] - row[i].length)}`;
-        }
-      }
-    }
-
-    return tables.map((table) => table.map((row) => row.join(" | ")));
+    return tables.map(
+      (table) => table.map(
+        (row) => `${indent_2}${row.map(
+          (col, i) => `${col}${get_space(max_length[i] - col.length)}`
+        ).join(" | ")}`
+      )
+    );
   })();
-
-  const has_results = results.length > 0;
-  const has_ingredients = ingredients.length > 0;
-  const has_totals = totals.length > 0;
 
   return has_results || has_ingredients || has_totals ? `
     <div class="c-summary">
@@ -754,15 +753,15 @@ const render_summary = (recipes) => {
         ${has_results ? `
           <br>
           <br>
-          ${get_space(2)}Results
+          ${indent_1}Results
           <br>
           <br>
-          ${results.join("<br>")}        
+          ${results.join("<br>")}
         ` : ""}
         ${has_ingredients ? `
           <br>
           <br>
-          ${get_space(2)}Ingredients
+          ${indent_1}Ingredients
           <br>
           <br>
           ${ingredients.join("<br>")}
@@ -770,7 +769,7 @@ const render_summary = (recipes) => {
         ${has_totals ? `
           <br>
           <br>
-          ${get_space(2)}Totals
+          ${indent_1}Totals
           <br>
           <br>
           ${totals.join("<br>")}
@@ -791,7 +790,7 @@ const render_table = () => {
     VALUE_30_NQ: -SORT.VALUE_30_NQ
   };
 
-  const get_str_price = (price, qty) => price ? `${print_n(price)} gil${qty > 1 ? ` (${print_n(price * qty)} total)` : ""}` : "?";
+  const get_str_price = (price, qty) => price ? `${print_n(price)} gil${qty > 1 ? ` (${print_n(price * qty)} total)` : ""}` : "-";
 
   const render_ingredient = (price, qty) => `<td class="c-table__cell" colspan=4>${get_str_price(price, qty)}</td>`;
 
@@ -800,12 +799,12 @@ const render_table = () => {
 
     return `
       <td class="c-result c-table__cell" colspan=2>
-        ${profit ? `
+        ${price ? `
           <p class="c-result__stat">${get_str_price(price, qty)}</p>
-          <p class="c-result__stat"><span class="${color}">${plus}${print_n(profit)} gil</span> (${print_n(profit_pc)})%</p>
+          ${profit ? `<p class="c-result__stat"><span class="${color}">${plus}${print_n(profit)} gil</span> (${print_n(profit_pc)})%</p>` : "-"}
           <p class="c-result__stat">${print_n(sold_ge)} / ${print_n(sold)} sold (${print_n(sold_pc)}%)</p>
-          <p class="c-result__stat ${color}">${plus}${print_n(profit_pd)} gil / day</p>
-        ` : "?"}
+          ${profit ? `<p class="c-result__stat ${color}">${plus}${print_n(profit_pd)} gil / day</p>` : "-"}
+        ` : "-"}
       </td>
     `;
   };
